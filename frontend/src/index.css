@@ -75,6 +75,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 0.4rem;
 }
 
+.btn-nav {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-nav:hover { background: #e0e0e0; }
+.btn-nav:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .date-input {
   padding: 0.4rem 0.5rem;
   border: 1px solid #ccc;

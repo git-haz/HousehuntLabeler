@@ -82,18 +82,16 @@ async function ensureLabel(accessToken, name) {
   return created.id;
 }
 
-export async function retrieveEmails(accessToken, afterDate) {
-  let q = 'is:unread in:inbox';
+export async function retrieveEmails(accessToken, afterDate, beforeDate) {
+  let q = 'is:unread in:inbox -label:processed';
   if (afterDate) q += ` after:${afterDate}`;
-  const listData = await gmailFetch(`/messages?maxResults=10&q=${encodeURIComponent(q)}`, accessToken);
+  if (beforeDate) q += ` before:${beforeDate}`;
+  const listData = await gmailFetch(`/messages?maxResults=50&q=${encodeURIComponent(q)}`, accessToken);
   const messageIds = (listData.messages || []).map(m => m.id);
 
   const emails = [];
   for (const id of messageIds) {
     const msg = await gmailFetch(`/messages/${id}?format=full`, accessToken);
-    const allowedLabels = new Set(['INBOX', 'UNREAD', 'CATEGORY_PRIMARY', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS']);
-    const msgLabels = msg.labelIds || [];
-    if (msgLabels.some(l => !allowedLabels.has(l))) continue;
 
     const headers = msg.payload.headers || [];
     const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '(no subject)';

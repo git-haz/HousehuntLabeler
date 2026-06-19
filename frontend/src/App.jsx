@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const VERSION_HISTORY = [
+  { version: '1.7.0', date: '2026-06-19', changes: 'Show Newer / Show Older navigation buttons to page through emails; exclude already-processed emails' },
   { version: '1.6.0', date: '2026-06-19', changes: 'Date filter for retrieving emails newer than a chosen date' },
   { version: '1.5.0', date: '2026-06-19', changes: 'Broader property link detection via /property/ path; Suffolk location detection keeps emails unread' },
   { version: '1.4.0', date: '2026-06-19', changes: 'Property link detection and scraping: shows price, bedrooms, type, address as chips with direct links' },
@@ -74,17 +75,16 @@ export default function App() {
     }
   };
 
-  const handleRetrieve = async () => {
+  const fetchEmails = async (after, before) => {
     setLoading(true);
-    setEmails([]);
     setSelected(new Set());
     setResults([]);
-    log('Retrieving 10 oldest emails...');
+    log(`Retrieving emails${after ? ` after ${after}` : ''}${before ? ` before ${before}` : ''}...`);
     try {
       const res = await fetch(`${BACKEND}/retrieve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ afterDate: afterDate || undefined }),
+        body: JSON.stringify({ afterDate: after || undefined, beforeDate: before || undefined }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -98,6 +98,31 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRetrieve = () => fetchEmails(afterDate, null);
+
+  const getEmailDate = (dateStr) => {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    return d.toISOString().split('T')[0];
+  };
+
+  const handleNewer = () => {
+    if (emails.length === 0) return;
+    const dates = emails.map(e => new Date(e.date)).filter(d => !isNaN(d));
+    if (dates.length === 0) return;
+    const newest = new Date(Math.max(...dates));
+    newest.setDate(newest.getDate() + 1);
+    fetchEmails(newest.toISOString().split('T')[0], null);
+  };
+
+  const handleOlder = () => {
+    if (emails.length === 0) return;
+    const dates = emails.map(e => new Date(e.date)).filter(d => !isNaN(d));
+    if (dates.length === 0) return;
+    const oldest = new Date(Math.min(...dates));
+    fetchEmails(afterDate || null, oldest.toISOString().split('T')[0]);
   };
 
   const toggleSelect = (id) => {
@@ -181,6 +206,10 @@ export default function App() {
             <button className="btn-small" onClick={toggleAll}>
               {selected.size === emails.length ? 'Deselect All' : 'Select All'}
             </button>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <button className="btn-nav" onClick={handleNewer} disabled={loading}>Show Newer</button>
+            <button className="btn-nav" onClick={handleOlder} disabled={loading}>Show Older</button>
           </div>
           {emails.map((e) => (
             <div
