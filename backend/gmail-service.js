@@ -1,4 +1,5 @@
 import { extractPropertyLinks, scrapePropertyDetails } from './property-scraper.js';
+import { analyzePdfAttachment } from './pdf-analyzer.js';
 
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -48,6 +49,23 @@ function hasPdfAttachment(payload) {
     return false;
   };
   return check(payload);
+}
+
+function findPdfParts(payload) {
+  const results = [];
+  const scan = (part) => {
+    if (part.mimeType === 'application/pdf' && part.body?.attachmentId) {
+      results.push({ attachmentId: part.body.attachmentId, filename: part.filename || 'attachment.pdf' });
+    }
+    if (part.parts) part.parts.forEach(scan);
+  };
+  scan(payload);
+  return results;
+}
+
+async function downloadAttachment(accessToken, messageId, attachmentId) {
+  const data = await gmailFetch(`/messages/${messageId}/attachments/${attachmentId}`, accessToken);
+  return Buffer.from(data.data, 'base64url');
 }
 
 const REJECT_KEYWORDS = ['terraced', 'link-attached', 'end-terraced'];
@@ -132,6 +150,9 @@ export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
   const labelProcessedId = await ensureLabel(accessToken, 'processed');
   const labelAttachmentId = await ensureLabel(accessToken, 'attachment');
   const labelRejectId = await ensureLabel(accessToken, 'reject');
+  const labelDetachedId = await ensureLabel(accessToken, 'detached');
+  const labelRejectHousetypeId = await ensureLabel(accessToken, 'reject-housetype');
+  const labelReviewId = await ensureLabel(accessToken, 'review');
 
   const results = [];
 
@@ -154,6 +175,44 @@ export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
       labelsToAdd.push(labelAttachmentId);
       appliedNames.push('attachment');
       reasoning.push('Added "attachment" — email contains a PDF attachment.');
+
+      const msg = await gmailFetch(`/messages/${id}?format=full`, accessToken);
+      const pdfParts = findPdfParts(msg.payload);
+      const pdfAnalyses = [];
+
+      for (let pi = 0; pi < pdfParts.length; pi++) {
+        const part = pdfParts[pi];
+        try {
+          const pdfBuffer = await downloadAttachment(accessToken, id, part.attachmentId);
+          const analysis = await analyzePdfAttachment(pdfBuffer);
+          pdfAnalyses.push({ filename: part.filename, index: pi + 1, ...analysis });
+          reasoning.push(`PDF #${pi + 1} "${part.filename}": ${analysis.classification} (confidence: ${analysis.confidence}%). ${analysis.reasoning}`);
+          reasoning.push(`  ${analysis.imageNote}`);
+        } catch (err) {
+          pdfAnalyses.push({ filename: part.filename, index: pi + 1, classification: 'unknown', label: 'review', confidence: 0, reasoning: `Error: ${err.message}` });
+          reasoning.push(`PDF #${pi + 1} "${part.filename}": Error reading PDF — ${err.message}`);
+        }
+      }
+
+      if (pdfAnalyses.length > 0) {
+        const detachedResults = pdfAnalyses.filter(a => a.label === 'detached');
+        const rejectResults = pdfAnalyses.filter(a => a.label === 'reject-housetype');
+        const reviewResults = pdfAnalyses.filter(a => a.label === 'review');
+
+        if (detachedResults.length > 0 && rejectResults.length === 0 && reviewResults.length === 0) {
+          labelsToAdd.push(labelDetachedId);
+          appliedNames.push('detached');
+          reasoning.push(`Added "detached" — PDF analysis confirms detached/bungalow with high confidence.`);
+        } else if (rejectResults.length > 0) {
+          labelsToAdd.push(labelRejectHousetypeId);
+          appliedNames.push('reject-housetype');
+          reasoning.push(`Added "reject-housetype" — PDF analysis indicates non-detached property type.`);
+        } else {
+          labelsToAdd.push(labelReviewId);
+          appliedNames.push('review');
+          reasoning.push(`Added "review" — PDF analysis inconclusive, manual review needed.`);
+        }
+      }
     }
 
     if (meta?.matchedKeywords?.length > 0) {

@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 const VERSION_HISTORY = [
+  { version: '1.9.0', date: '2026-06-19', changes: 'From/To date range; PDF house type classification (detached/bungalow/reject); downloadable processing log' },
   { version: '1.8.0', date: '2026-06-19', changes: 'Label filters: include/exclude labels when retrieving; toggle unread-only vs all emails' },
   { version: '1.7.0', date: '2026-06-19', changes: 'Show Newer / Show Older navigation buttons to page through emails; exclude already-processed emails' },
   { version: '1.6.0', date: '2026-06-19', changes: 'Date filter for retrieving emails newer than a chosen date' },
@@ -24,6 +25,7 @@ export default function App() {
   const [selected, setSelected] = useState(new Set());
   const [results, setResults] = useState([]);
   const [afterDate, setAfterDate] = useState('');
+  const [beforeDate, setBeforeDate] = useState('');
   const [allLabels, setAllLabels] = useState([]);
   const [includeLabels, setIncludeLabels] = useState([]);
   const [excludeLabels, setExcludeLabels] = useState([]);
@@ -120,7 +122,7 @@ export default function App() {
     }
   };
 
-  const handleRetrieve = () => fetchEmails(afterDate, null);
+  const handleRetrieve = () => fetchEmails(afterDate, beforeDate);
 
   const getEmailDate = (dateStr) => {
     const d = new Date(dateStr);
@@ -135,6 +137,27 @@ export default function App() {
     const newest = new Date(Math.max(...dates));
     newest.setDate(newest.getDate() + 1);
     fetchEmails(newest.toISOString().split('T')[0], null);
+  };
+
+  const handleDownloadLog = () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const lines = [`HousehuntLabeler Log — ${new Date().toLocaleString()}`, ''];
+    results.forEach((r) => {
+      lines.push(`Email: ${r.subject}`);
+      lines.push(`ID: ${r.id}`);
+      lines.push(`Labels: ${r.labels.join(', ')}`);
+      r.reasoning.forEach((reason) => lines.push(`  - ${reason}`));
+      lines.push('');
+    });
+    lines.push('--- Console Log ---', '');
+    logs.forEach((l) => lines.push(l));
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `househuntlabelerLog_${timestamp}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleOlder = () => {
@@ -206,8 +229,12 @@ export default function App() {
         <>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <label className="date-label">
-              After:
+              From:
               <input type="date" value={afterDate} onChange={(e) => setAfterDate(e.target.value)} className="date-input" />
+            </label>
+            <label className="date-label">
+              To:
+              <input type="date" value={beforeDate} onChange={(e) => setBeforeDate(e.target.value)} className="date-input" />
             </label>
             <button className="btn-process" onClick={handleRetrieve} disabled={loading}>
               {loading ? 'Retrieving...' : 'Retrieve Emails'}
@@ -334,7 +361,10 @@ export default function App() {
 
       {results.length > 0 && (
         <div style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Processing Log</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Processing Log</h2>
+            <button className="btn-small" onClick={handleDownloadLog}>Download Log</button>
+          </div>
           {results.map((r) => (
             <div key={r.id} className="result-card">
               <strong>{r.subject}</strong>
