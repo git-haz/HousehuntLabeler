@@ -266,6 +266,46 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-bottom: 0.2rem;
 }
 
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #888;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+}
+.tab:hover { color: #333; }
+.tab-active { color: #1a73e8; border-bottom-color: #1a73e8; }
+
+.tab-content { min-height: 200px; }
+
+.pagination {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-nav-active {
+  background: #1a73e8 !important;
+  color: #fff !important;
+  border-color: #1a73e8 !important;
+}
+
 .version-footer {
   margin-top: 3rem;
   padding-top: 1rem;

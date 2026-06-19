@@ -2,8 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '2.0.0';
+const EMAILS_PER_PAGE = 20;
+const VERSION = '2.1.0';
 const VERSION_HISTORY = [
+  { version: '2.1.0', date: '2026-06-19', changes: 'Paginated email list (20/page); tabbed view for Emails, Results, and Log' },
   { version: '2.0.0', date: '2026-06-19', changes: 'AI vision analysis: optional Claude Haiku-powered photo analysis of PDF property images for house type classification; per-email selection' },
   { version: '1.9.0', date: '2026-06-19', changes: 'From/To date range; PDF house type classification (detached/bungalow/reject); downloadable processing log' },
   { version: '1.8.0', date: '2026-06-19', changes: 'Label filters: include/exclude labels when retrieving; toggle unread-only vs all emails' },
@@ -37,6 +39,8 @@ export default function App() {
   const [visionSelected, setVisionSelected] = useState(new Set());
   const [visionResults, setVisionResults] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
+  const [page, setPage] = useState(0);
+  const [activeTab, setActiveTab] = useState('emails');
   const tokenClientRef = useRef(null);
 
   const log = useCallback((msg) => {
@@ -100,6 +104,8 @@ export default function App() {
     setLoading(true);
     setSelected(new Set());
     setResults([]);
+    setPage(0);
+    setActiveTab('emails');
     log(`Retrieving emails${after ? ` after ${after}` : ''}${before ? ` before ${before}` : ''}...`);
     try {
       const res = await fetch(`${BACKEND}/retrieve`, {
@@ -129,12 +135,6 @@ export default function App() {
 
   const handleRetrieve = () => fetchEmails(afterDate, beforeDate);
 
-  const getEmailDate = (dateStr) => {
-    const d = new Date(dateStr);
-    if (isNaN(d)) return null;
-    return d.toISOString().split('T')[0];
-  };
-
   const handleNewer = () => {
     if (emails.length === 0) return;
     const dates = emails.map(e => new Date(e.date)).filter(d => !isNaN(d));
@@ -142,6 +142,14 @@ export default function App() {
     const newest = new Date(Math.max(...dates));
     newest.setDate(newest.getDate() + 1);
     fetchEmails(newest.toISOString().split('T')[0], null);
+  };
+
+  const handleOlder = () => {
+    if (emails.length === 0) return;
+    const dates = emails.map(e => new Date(e.date)).filter(d => !isNaN(d));
+    if (dates.length === 0) return;
+    const oldest = new Date(Math.min(...dates));
+    fetchEmails(afterDate || null, oldest.toISOString().split('T')[0]);
   };
 
   const toggleVision = (id) => {
@@ -169,6 +177,7 @@ export default function App() {
       const data = await res.json();
       if (data.ok) {
         setVisionResults(data.results);
+        setActiveTab('results');
         log(`Vision analysis complete for ${data.results.length} email(s).`);
         data.results.forEach((r) => {
           if (r.error) {
@@ -237,14 +246,6 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleOlder = () => {
-    if (emails.length === 0) return;
-    const dates = emails.map(e => new Date(e.date)).filter(d => !isNaN(d));
-    if (dates.length === 0) return;
-    const oldest = new Date(Math.min(...dates));
-    fetchEmails(afterDate || null, oldest.toISOString().split('T')[0]);
-  };
-
   const toggleSelect = (id) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -278,6 +279,7 @@ export default function App() {
       const data = await res.json();
       if (data.ok) {
         setResults(data.results);
+        setActiveTab('results');
         log(`Done. Labeled ${data.results.length} emails.`);
         data.results.forEach((r) => {
           log(`  ${r.id} — labels: [${r.labels.join(', ')}]${r.hasPdf ? ' PDF' : ''}${r.matchedKeywords.length ? ` keywords: ${r.matchedKeywords.join(', ')}` : ''}`);
@@ -291,6 +293,11 @@ export default function App() {
       setProcessing(false);
     }
   };
+
+  const totalPages = Math.ceil(emails.length / EMAILS_PER_PAGE);
+  const pagedEmails = emails.slice(page * EMAILS_PER_PAGE, (page + 1) * EMAILS_PER_PAGE);
+  const hasResults = results.length > 0 || visionResults.length > 0;
+  const hasLogs = logs.length > 0;
 
   return (
     <div>
@@ -396,141 +403,190 @@ export default function App() {
         </>
       )}
 
-      {emails.length > 0 && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Emails</h2>
-            <button className="btn-small" onClick={toggleAll}>
-              {selected.size === emails.length ? 'Deselect All' : 'Select All'}
+      {(emails.length > 0 || hasResults || hasLogs) && (
+        <div className="tabs" style={{ marginTop: '1.5rem' }}>
+          <div className="tab-bar">
+            <button className={`tab ${activeTab === 'emails' ? 'tab-active' : ''}`} onClick={() => setActiveTab('emails')}>
+              Emails {emails.length > 0 && `(${emails.length})`}
+            </button>
+            <button className={`tab ${activeTab === 'results' ? 'tab-active' : ''}`} onClick={() => setActiveTab('results')}>
+              Results {(results.length + visionResults.length) > 0 && `(${results.length + visionResults.length})`}
+            </button>
+            <button className={`tab ${activeTab === 'log' ? 'tab-active' : ''}`} onClick={() => setActiveTab('log')}>
+              Log {hasLogs && `(${logs.length})`}
             </button>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            <button className="btn-nav" onClick={handleNewer} disabled={loading}>Show Newer</button>
-            <button className="btn-nav" onClick={handleOlder} disabled={loading}>Show Older</button>
-          </div>
-          {emails.map((e) => (
-            <div
-              key={e.id}
-              className={`email-card ${selected.has(e.id) ? 'email-selected' : ''}`}
-              onClick={() => toggleSelect(e.id)}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <input
-                  type="checkbox"
-                  checked={selected.has(e.id)}
-                  onChange={() => toggleSelect(e.id)}
-                  onClick={(ev) => ev.stopPropagation()}
-                  style={{ marginTop: '3px' }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{e.subject}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#666' }}>{e.from}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '2px' }}>{e.date}</div>
-                  <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '4px' }}>{e.snippet}</div>
-                  <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {e.hasPdf && <span className="label-badge badge-pdf">PDF</span>}
-                    {e.hasPdf && anthropicKey && (
-                      <label className="vision-check" onClick={(ev) => ev.stopPropagation()}>
-                        <input type="checkbox" checked={visionSelected.has(e.id)} onChange={() => toggleVision(e.id)} />
-                        AI Vision
-                      </label>
-                    )}
-                    {e.inSuffolk && <span className="label-badge badge-suffolk">Suffolk</span>}
-                    {e.matchedKeywords.map((kw) => (
-                      <span key={kw} className="label-badge badge-keyword">{kw}</span>
+
+          <div className="tab-content">
+            {activeTab === 'emails' && emails.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button className="btn-small" onClick={toggleAll}>
+                    {selected.size === emails.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                  <button className="btn-nav" onClick={handleNewer} disabled={loading}>Show Newer</button>
+                  <button className="btn-nav" onClick={handleOlder} disabled={loading}>Show Older</button>
+                  <span style={{ fontSize: '0.8rem', color: '#888', marginLeft: 'auto' }}>
+                    Page {page + 1} of {totalPages} ({emails.length} emails)
+                  </span>
+                </div>
+                {pagedEmails.map((e) => (
+                  <div
+                    key={e.id}
+                    className={`email-card ${selected.has(e.id) ? 'email-selected' : ''}`}
+                    onClick={() => toggleSelect(e.id)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(e.id)}
+                        onChange={() => toggleSelect(e.id)}
+                        onClick={(ev) => ev.stopPropagation()}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600 }}>{e.subject}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{e.from}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '2px' }}>{e.date}</div>
+                        <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '4px' }}>{e.snippet}</div>
+                        <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {e.hasPdf && <span className="label-badge badge-pdf">PDF</span>}
+                          {e.hasPdf && anthropicKey && (
+                            <label className="vision-check" onClick={(ev) => ev.stopPropagation()}>
+                              <input type="checkbox" checked={visionSelected.has(e.id)} onChange={() => toggleVision(e.id)} />
+                              AI Vision
+                            </label>
+                          )}
+                          {e.inSuffolk && <span className="label-badge badge-suffolk">Suffolk</span>}
+                          {e.matchedKeywords.map((kw) => (
+                            <span key={kw} className="label-badge badge-keyword">{kw}</span>
+                          ))}
+                        </div>
+                        {e.properties?.length > 0 && (
+                          <div className="property-cards">
+                            {e.properties.map((p, pi) => (
+                              <a key={pi} href={p.url} target="_blank" rel="noopener noreferrer" className="property-card" onClick={(ev) => ev.stopPropagation()}>
+                                {p.image && <img src={p.image} alt="" className="property-img" />}
+                                <div className="property-info">
+                                  {p.price && <span className="property-chip chip-price">{p.price}</span>}
+                                  {p.bedrooms && <span className="property-chip chip-beds">{p.bedrooms}</span>}
+                                  {p.type && <span className="property-chip chip-type">{p.type}</span>}
+                                  {p.address && <div className="property-address">{p.address}</div>}
+                                  {!p.price && !p.address && p.description && <div className="property-address">{p.description.slice(0, 120)}</div>}
+                                  {p.error && <div className="property-address" style={{ color: '#d93025' }}>Could not fetch details</div>}
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button className="btn-nav" onClick={() => setPage(0)} disabled={page === 0}>First</button>
+                    <button className="btn-nav" onClick={() => setPage(p => p - 1)} disabled={page === 0}>Prev</button>
+                    {Array.from({ length: totalPages }, (_, i) => (
+                      <button
+                        key={i}
+                        className={`btn-nav ${i === page ? 'btn-nav-active' : ''}`}
+                        onClick={() => setPage(i)}
+                      >
+                        {i + 1}
+                      </button>
+                    )).slice(Math.max(0, page - 3), page + 4)}
+                    <button className="btn-nav" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>Next</button>
+                    <button className="btn-nav" onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>Last</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'results' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button className="btn-small" onClick={handleDownloadLog}>Download Log</button>
+                </div>
+                {results.length > 0 && (
+                  <>
+                    <h3 style={{ fontSize: '1rem', margin: '0.5rem 0' }}>Processing Results</h3>
+                    {results.map((r) => (
+                      <div key={r.id} className="result-card">
+                        <strong>{r.subject}</strong>
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>{r.id}</div>
+                        <div style={{ marginTop: '0.4rem' }}>
+                          {r.labels.map((l) => (
+                            <span key={l} className="label-badge">{l}</span>
+                          ))}
+                        </div>
+                        <ul className="reasoning-list">
+                          {r.reasoning.map((reason, i) => (
+                            <li key={i}>{reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {visionResults.length > 0 && (
+                  <>
+                    <h3 style={{ fontSize: '1rem', margin: '0.5rem 0' }}>AI Vision Analysis</h3>
+                    {visionResults.map((r) => (
+                      <div key={r.id} className="result-card">
+                        <strong>{r.subject}</strong>
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>{r.id}</div>
+                        {r.error ? (
+                          <div style={{ color: '#d93025', marginTop: '0.4rem' }}>{r.error}</div>
+                        ) : r.analysis ? (
+                          <div style={{ marginTop: '0.4rem' }}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                              <span className={`label-badge ${r.analysis.label === 'detached' ? 'badge-detached' : r.analysis.label === 'reject-housetype' ? 'badge-reject' : 'badge-review'}`}>
+                                {r.analysis.label}
+                              </span>
+                              <span className="label-badge">{r.analysis.overall_classification}</span>
+                              <span className="label-badge">{r.analysis.overall_confidence}% confidence</span>
+                              {r.analysis.appliedLabel && <span className="label-badge badge-applied">label applied: {r.analysis.appliedLabel}</span>}
+                            </div>
+                            {r.analysis.images?.map((img) => (
+                              <div key={img.image_number} className="vision-image-result">
+                                <strong>Image {img.image_number}:</strong> {img.classification} ({img.confidence}%)
+                                <div style={{ fontSize: '0.8rem', color: '#555' }}>{img.reasoning}</div>
+                              </div>
+                            ))}
+                            {r.analysis.usage && (
+                              <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.3rem' }}>
+                                Tokens: {r.analysis.usage.input_tokens} input / {r.analysis.usage.output_tokens} output
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </>
+                )}
+                {!hasResults && <div style={{ color: '#888', padding: '2rem 0', textAlign: 'center' }}>No results yet. Process or analyze emails first.</div>}
+              </div>
+            )}
+
+            {activeTab === 'log' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button className="btn-small" onClick={handleDownloadLog}>Download Log</button>
+                  <button className="btn-small" onClick={() => setLogs([])}>Clear</button>
+                </div>
+                {hasLogs ? (
+                  <div className="log-panel">
+                    {logs.map((l, i) => (
+                      <div key={i}>{l}</div>
                     ))}
                   </div>
-                  {e.properties?.length > 0 && (
-                    <div className="property-cards">
-                      {e.properties.map((p, pi) => (
-                        <a key={pi} href={p.url} target="_blank" rel="noopener noreferrer" className="property-card" onClick={(ev) => ev.stopPropagation()}>
-                          {p.image && <img src={p.image} alt="" className="property-img" />}
-                          <div className="property-info">
-                            {p.price && <span className="property-chip chip-price">{p.price}</span>}
-                            {p.bedrooms && <span className="property-chip chip-beds">{p.bedrooms}</span>}
-                            {p.type && <span className="property-chip chip-type">{p.type}</span>}
-                            {p.address && <div className="property-address">{p.address}</div>}
-                            {!p.price && !p.address && p.description && <div className="property-address">{p.description.slice(0, 120)}</div>}
-                            {p.error && <div className="property-address" style={{ color: '#d93025' }}>Could not fetch details</div>}
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                ) : (
+                  <div style={{ color: '#888', padding: '2rem 0', textAlign: 'center' }}>No log entries yet.</div>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Processing Log</h2>
-            <button className="btn-small" onClick={handleDownloadLog}>Download Log</button>
+            )}
           </div>
-          {results.map((r) => (
-            <div key={r.id} className="result-card">
-              <strong>{r.subject}</strong>
-              <div style={{ fontSize: '0.8rem', color: '#888' }}>{r.id}</div>
-              <div style={{ marginTop: '0.4rem' }}>
-                {r.labels.map((l) => (
-                  <span key={l} className="label-badge">{l}</span>
-                ))}
-              </div>
-              <ul className="reasoning-list">
-                {r.reasoning.map((reason, i) => (
-                  <li key={i}>{reason}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {visionResults.length > 0 && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>AI Vision Analysis</h2>
-          {visionResults.map((r) => (
-            <div key={r.id} className="result-card">
-              <strong>{r.subject}</strong>
-              <div style={{ fontSize: '0.8rem', color: '#888' }}>{r.id}</div>
-              {r.error ? (
-                <div style={{ color: '#d93025', marginTop: '0.4rem' }}>{r.error}</div>
-              ) : r.analysis ? (
-                <div style={{ marginTop: '0.4rem' }}>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
-                    <span className={`label-badge ${r.analysis.label === 'detached' ? 'badge-detached' : r.analysis.label === 'reject-housetype' ? 'badge-reject' : 'badge-review'}`}>
-                      {r.analysis.label}
-                    </span>
-                    <span className="label-badge">{r.analysis.overall_classification}</span>
-                    <span className="label-badge">{r.analysis.overall_confidence}% confidence</span>
-                    {r.analysis.appliedLabel && <span className="label-badge badge-applied">label applied: {r.analysis.appliedLabel}</span>}
-                  </div>
-                  {r.analysis.images?.map((img) => (
-                    <div key={img.image_number} className="vision-image-result">
-                      <strong>Image {img.image_number}:</strong> {img.classification} ({img.confidence}%)
-                      <div style={{ fontSize: '0.8rem', color: '#555' }}>{img.reasoning}</div>
-                    </div>
-                  ))}
-                  {r.analysis.usage && (
-                    <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.3rem' }}>
-                      Tokens: {r.analysis.usage.input_tokens} input / {r.analysis.usage.output_tokens} output
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {logs.length > 0 && (
-        <div className="log-panel">
-          {logs.map((l, i) => (
-            <div key={i}>{l}</div>
-          ))}
         </div>
       )}
 
