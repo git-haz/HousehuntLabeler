@@ -3,8 +3,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const EMAILS_PER_PAGE = 20;
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 const VERSION_HISTORY = [
+  { version: '2.3.0', date: '2026-06-19', changes: 'Property info extraction (price, town, county, chain-free) with client-side filtering by price range, town, county, and chain-free status' },
   { version: '2.2.0', date: '2026-06-19', changes: 'Keyword search filters (subject, body, from) replace label include/exclude' },
   { version: '2.1.0', date: '2026-06-19', changes: 'Paginated email list (20/page); tabbed view for Emails, Results, and Log' },
   { version: '2.0.0', date: '2026-06-19', changes: 'AI vision analysis: optional Claude Haiku-powered photo analysis of PDF property images for house type classification; per-email selection' },
@@ -42,6 +43,11 @@ export default function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [page, setPage] = useState(0);
   const [activeTab, setActiveTab] = useState('emails');
+  const [filterPriceMin, setFilterPriceMin] = useState('');
+  const [filterPriceMax, setFilterPriceMax] = useState('');
+  const [filterTowns, setFilterTowns] = useState(new Set());
+  const [filterCounties, setFilterCounties] = useState(new Set());
+  const [filterChainFree, setFilterChainFree] = useState(false);
   const tokenClientRef = useRef(null);
 
   const log = useCallback((msg) => {
@@ -250,10 +256,10 @@ export default function App() {
   };
 
   const toggleAll = () => {
-    if (selected.size === emails.length) {
+    if (selected.size === filteredEmails.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(emails.map((e) => e.id)));
+      setSelected(new Set(filteredEmails.map((e) => e.id)));
     }
   };
 
@@ -288,8 +294,50 @@ export default function App() {
     }
   };
 
-  const totalPages = Math.ceil(emails.length / EMAILS_PER_PAGE);
-  const pagedEmails = emails.slice(page * EMAILS_PER_PAGE, (page + 1) * EMAILS_PER_PAGE);
+  const allTowns = [...new Set(emails.map(e => e.info?.town).filter(Boolean))].sort();
+  const allCounties = [...new Set(emails.map(e => e.info?.county).filter(Boolean))].sort();
+
+  const filteredEmails = emails.filter((e) => {
+    const info = e.info || {};
+    if (filterPriceMin && info.price && info.price < Number(filterPriceMin)) return false;
+    if (filterPriceMax && info.price && info.price > Number(filterPriceMax)) return false;
+    if (filterTowns.size > 0 && (!info.town || !filterTowns.has(info.town))) return false;
+    if (filterCounties.size > 0 && (!info.county || !filterCounties.has(info.county))) return false;
+    if (filterChainFree && !info.chainFree) return false;
+    return true;
+  });
+
+  const hasActiveFilters = filterPriceMin || filterPriceMax || filterTowns.size > 0 || filterCounties.size > 0 || filterChainFree;
+
+  const clearInfoFilters = () => {
+    setFilterPriceMin('');
+    setFilterPriceMax('');
+    setFilterTowns(new Set());
+    setFilterCounties(new Set());
+    setFilterChainFree(false);
+    setPage(0);
+  };
+
+  const toggleFilterTown = (t) => {
+    setFilterTowns(prev => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t); else next.add(t);
+      return next;
+    });
+    setPage(0);
+  };
+
+  const toggleFilterCounty = (c) => {
+    setFilterCounties(prev => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c); else next.add(c);
+      return next;
+    });
+    setPage(0);
+  };
+
+  const totalPages = Math.ceil(filteredEmails.length / EMAILS_PER_PAGE);
+  const pagedEmails = filteredEmails.slice(page * EMAILS_PER_PAGE, (page + 1) * EMAILS_PER_PAGE);
   const hasResults = results.length > 0 || visionResults.length > 0;
   const hasLogs = logs.length > 0;
 
@@ -398,16 +446,52 @@ export default function App() {
           <div className="tab-content">
             {activeTab === 'emails' && emails.length > 0 && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                   <button className="btn-small" onClick={toggleAll}>
-                    {selected.size === emails.length ? 'Deselect All' : 'Select All'}
+                    {selected.size === filteredEmails.length ? 'Deselect All' : 'Select All'}
                   </button>
                   <button className="btn-nav" onClick={handleNewer} disabled={loading}>Show Newer</button>
                   <button className="btn-nav" onClick={handleOlder} disabled={loading}>Show Older</button>
                   <span style={{ fontSize: '0.8rem', color: '#888', marginLeft: 'auto' }}>
-                    Page {page + 1} of {totalPages} ({emails.length} emails)
+                    {hasActiveFilters ? `${filteredEmails.length} of ${emails.length}` : emails.length} emails
+                    {totalPages > 1 && ` — page ${page + 1}/${totalPages}`}
                   </span>
                 </div>
+                {(allTowns.length > 0 || allCounties.length > 0 || emails.some(e => e.info?.price) || emails.some(e => e.info?.chainFree)) && (
+                  <div className="info-filter-bar">
+                    <div className="info-filter-row">
+                      <span className="info-filter-label">Price:</span>
+                      <input type="number" placeholder="Min" value={filterPriceMin} onChange={(e) => { setFilterPriceMin(e.target.value); setPage(0); }} className="price-input" />
+                      <span style={{ fontSize: '0.8rem' }}>–</span>
+                      <input type="number" placeholder="Max" value={filterPriceMax} onChange={(e) => { setFilterPriceMax(e.target.value); setPage(0); }} className="price-input" />
+                      <label className="filter-toggle" style={{ marginLeft: '0.5rem' }}>
+                        <input type="checkbox" checked={filterChainFree} onChange={(e) => { setFilterChainFree(e.target.checked); setPage(0); }} />
+                        Chain free only
+                      </label>
+                      {hasActiveFilters && <button className="btn-small" onClick={clearInfoFilters} style={{ marginLeft: 'auto' }}>Clear filters</button>}
+                    </div>
+                    {allTowns.length > 0 && (
+                      <div className="info-filter-row">
+                        <span className="info-filter-label">Town:</span>
+                        <div className="filter-chips">
+                          {allTowns.map(t => (
+                            <span key={t} className={`filter-chip ${filterTowns.has(t) ? 'chip-active-include' : ''}`} onClick={() => toggleFilterTown(t)}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {allCounties.length > 0 && (
+                      <div className="info-filter-row">
+                        <span className="info-filter-label">County:</span>
+                        <div className="filter-chips">
+                          {allCounties.map(c => (
+                            <span key={c} className={`filter-chip ${filterCounties.has(c) ? 'chip-active-include' : ''}`} onClick={() => toggleFilterCounty(c)}>{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {pagedEmails.map((e) => (
                   <div
                     key={e.id}
@@ -436,6 +520,10 @@ export default function App() {
                             </label>
                           )}
                           {e.inSuffolk && <span className="label-badge badge-suffolk">Suffolk</span>}
+                          {e.info?.price && <span className="label-badge badge-price">£{e.info.price.toLocaleString()}</span>}
+                          {e.info?.town && <span className="label-badge badge-town">{e.info.town}</span>}
+                          {e.info?.county && <span className="label-badge badge-county">{e.info.county}</span>}
+                          {e.info?.chainFree && <span className="label-badge badge-chainfree">Chain Free</span>}
                           {e.matchedKeywords.map((kw) => (
                             <span key={kw} className="label-badge badge-keyword">{kw}</span>
                           ))}

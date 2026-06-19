@@ -278,6 +278,46 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge-reject { background: #fce4ec; color: #c62828; }
 .badge-review { background: #fff3e0; color: #e65100; }
 .badge-applied { background: #e0e0e0; color: #333; font-style: italic; }
+.badge-price { background: #e6f4ea; color: #137333; font-weight: 600; }
+.badge-town { background: #e3f2fd; color: #1565c0; }
+.badge-county { background: #ede7f6; color: #4527a0; }
+.badge-chainfree { background: #e0f2f1; color: #00695c; }
+
+.info-filter-bar {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.info-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.info-filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.price-input {
+  width: 100px;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.chip-active-include { background: #e8f0fe; color: #1a73e8; border-color: #1a73e8; }
 
 .reasoning-list {
   margin: 0.5rem 0 0 1.2rem;

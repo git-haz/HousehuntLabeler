@@ -1,5 +1,6 @@
 import { extractPropertyLinks, scrapePropertyDetails } from './property-scraper.js';
 import { analyzePdfAttachment } from './pdf-analyzer.js';
+import { extractPropertyInfo } from './info-extractor.js';
 
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -169,7 +170,8 @@ export async function retrieveEmails(accessToken, opts = {}) {
     }
 
     const inSuffolk = isInSuffolk(rawBody, properties);
-    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords, properties, inSuffolk, _bodyText: rawBody });
+    const info = extractPropertyInfo(rawBody, subject);
+    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords, properties, inSuffolk, info, _bodyText: rawBody });
   }
   return emails;
 }
