@@ -3,8 +3,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const EMAILS_PER_PAGE = 20;
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const VERSION_HISTORY = [
+  { version: '2.4.0', date: '2026-06-19', changes: 'Label include/exclude fields for retrieval with OR logic' },
   { version: '2.3.0', date: '2026-06-19', changes: 'Property info extraction (price, town, county, chain-free) with client-side filtering by price range, town, county, and chain-free status' },
   { version: '2.2.0', date: '2026-06-19', changes: 'Keyword search filters (subject, body, from) replace label include/exclude' },
   { version: '2.1.0', date: '2026-06-19', changes: 'Paginated email list (20/page); tabbed view for Emails, Results, and Log' },
@@ -34,6 +35,8 @@ export default function App() {
   const [searchSubject, setSearchSubject] = useState('');
   const [searchBody, setSearchBody] = useState('');
   const [searchFrom, setSearchFrom] = useState('');
+  const [labelsInclude, setLabelsInclude] = useState('');
+  const [labelsExclude, setLabelsExclude] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -116,6 +119,8 @@ export default function App() {
           searchSubject: searchSubject.trim() || undefined,
           searchBody: searchBody.trim() || undefined,
           searchFrom: searchFrom.trim() || undefined,
+          labelsInclude: labelsInclude.trim() || undefined,
+          labelsExclude: labelsExclude.trim() || undefined,
           unreadOnly,
         }),
       });
@@ -421,6 +426,22 @@ export default function App() {
                   </label>
                   <div style={{ fontSize: '0.75rem', color: '#888' }}>
                     Enter one or more words separated by spaces. All words must match.
+                  </div>
+                </div>
+              </div>
+              <div className="filter-section">
+                <div className="filter-heading">Labels:</div>
+                <div className="search-fields">
+                  <label className="search-field">
+                    <span>Include:</span>
+                    <input type="text" placeholder="e.g. house-search, starred" value={labelsInclude} onChange={(e) => setLabelsInclude(e.target.value)} className="search-input" />
+                  </label>
+                  <label className="search-field">
+                    <span>Exclude:</span>
+                    <input type="text" placeholder="e.g. processed, reject" value={labelsExclude} onChange={(e) => setLabelsExclude(e.target.value)} className="search-input" />
+                  </label>
+                  <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                    Comma-separated label names. Include: emails with ANY of these labels. Exclude: emails with NONE of these labels.
                   </div>
                 </div>
               </div>

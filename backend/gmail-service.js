@@ -137,12 +137,22 @@ export async function fetchLabels(accessToken) {
 }
 
 export async function retrieveEmails(accessToken, opts = {}) {
-  const { afterDate, beforeDate, searchSubject, searchBody, searchFrom, unreadOnly = true } = opts;
+  const { afterDate, beforeDate, searchSubject, searchBody, searchFrom, labelsInclude, labelsExclude, unreadOnly = true } = opts;
   let q = 'in:inbox -label:processed';
   if (unreadOnly) q += ' is:unread';
   if (searchSubject) searchSubject.split(/\s+/).filter(Boolean).forEach(w => { q += ` subject:${w}`; });
   if (searchBody) searchBody.split(/\s+/).filter(Boolean).forEach(w => { q += ` ${w}`; });
   if (searchFrom) searchFrom.split(/\s+/).filter(Boolean).forEach(w => { q += ` from:${w}`; });
+  if (labelsInclude) {
+    const labels = labelsInclude.split(',').map(l => l.trim()).filter(Boolean);
+    if (labels.length > 0) {
+      q += ' {' + labels.map(l => `label:${l.replace(/\s+/g, '-')}`).join(' ') + '}';
+    }
+  }
+  if (labelsExclude) {
+    const labels = labelsExclude.split(',').map(l => l.trim()).filter(Boolean);
+    labels.forEach(l => { q += ` -label:${l.replace(/\s+/g, '-')}`; });
+  }
   if (afterDate) q += ` after:${afterDate}`;
   if (beforeDate) q += ` before:${beforeDate}`;
   const listData = await gmailFetch(`/messages?maxResults=50&q=${encodeURIComponent(q)}`, accessToken);
