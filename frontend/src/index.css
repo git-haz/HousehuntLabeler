@@ -129,8 +129,32 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   transition: all 0.15s;
 }
 .filter-chip:hover { border-color: #aaa; }
-.chip-active-include { background: #e8f0fe; color: #1a73e8; border-color: #1a73e8; }
-.chip-active-exclude { background: #fce8e6; color: #d93025; border-color: #d93025; }
+.search-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.search-field span {
+  width: 55px;
+  font-weight: 500;
+  color: #555;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
 
 .log-panel {
   margin-top: 1.5rem;

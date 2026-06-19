@@ -50,8 +50,8 @@ app.post('/retrieve', async (req, res) => {
     const token = accessToken || stored?.access_token;
     if (!token) return res.status(401).json({ error: 'Not authenticated.' });
 
-    const { afterDate, beforeDate, includeLabels, excludeLabels, unreadOnly } = req.body;
-    cachedEmails = await retrieveEmails(token, { afterDate, beforeDate, includeLabels, excludeLabels, unreadOnly });
+    const { afterDate, beforeDate, searchSubject, searchBody, searchFrom, unreadOnly } = req.body;
+    cachedEmails = await retrieveEmails(token, { afterDate, beforeDate, searchSubject, searchBody, searchFrom, unreadOnly });
     res.json({ ok: true, emails: cachedEmails });
   } catch (err) {
     console.error('Retrieve error:', err.message);

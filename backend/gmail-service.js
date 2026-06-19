@@ -136,11 +136,12 @@ export async function fetchLabels(accessToken) {
 }
 
 export async function retrieveEmails(accessToken, opts = {}) {
-  const { afterDate, beforeDate, includeLabels, excludeLabels, unreadOnly = true } = opts;
+  const { afterDate, beforeDate, searchSubject, searchBody, searchFrom, unreadOnly = true } = opts;
   let q = 'in:inbox -label:processed';
   if (unreadOnly) q += ' is:unread';
-  if (includeLabels?.length) q += includeLabels.map(l => ` label:${l.replace(/\s+/g, '-')}`).join('');
-  if (excludeLabels?.length) q += excludeLabels.map(l => ` -label:${l.replace(/\s+/g, '-')}`).join('');
+  if (searchSubject) searchSubject.split(/\s+/).filter(Boolean).forEach(w => { q += ` subject:${w}`; });
+  if (searchBody) searchBody.split(/\s+/).filter(Boolean).forEach(w => { q += ` ${w}`; });
+  if (searchFrom) searchFrom.split(/\s+/).filter(Boolean).forEach(w => { q += ` from:${w}`; });
   if (afterDate) q += ` after:${afterDate}`;
   if (beforeDate) q += ` before:${beforeDate}`;
   const listData = await gmailFetch(`/messages?maxResults=50&q=${encodeURIComponent(q)}`, accessToken);

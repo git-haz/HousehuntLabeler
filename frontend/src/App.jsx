@@ -3,8 +3,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const EMAILS_PER_PAGE = 20;
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const VERSION_HISTORY = [
+  { version: '2.2.0', date: '2026-06-19', changes: 'Keyword search filters (subject, body, from) replace label include/exclude' },
   { version: '2.1.0', date: '2026-06-19', changes: 'Paginated email list (20/page); tabbed view for Emails, Results, and Log' },
   { version: '2.0.0', date: '2026-06-19', changes: 'AI vision analysis: optional Claude Haiku-powered photo analysis of PDF property images for house type classification; per-email selection' },
   { version: '1.9.0', date: '2026-06-19', changes: 'From/To date range; PDF house type classification (detached/bungalow/reject); downloadable processing log' },
@@ -29,9 +30,9 @@ export default function App() {
   const [results, setResults] = useState([]);
   const [afterDate, setAfterDate] = useState('');
   const [beforeDate, setBeforeDate] = useState('');
-  const [allLabels, setAllLabels] = useState([]);
-  const [includeLabels, setIncludeLabels] = useState([]);
-  const [excludeLabels, setExcludeLabels] = useState([]);
+  const [searchSubject, setSearchSubject] = useState('');
+  const [searchBody, setSearchBody] = useState('');
+  const [searchFrom, setSearchFrom] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -71,14 +72,6 @@ export default function App() {
               if (data.ok) {
                 setAuthenticated(true);
                 log('Authenticated successfully.');
-                try {
-                  const labelsRes = await fetch(`${BACKEND}/labels`);
-                  const labelsData = await labelsRes.json();
-                  if (labelsData.ok) {
-                    setAllLabels(labelsData.labels);
-                    log(`Loaded ${labelsData.labels.length} labels.`);
-                  }
-                } catch {}
               } else {
                 log(`Backend error: ${data.error}`);
               }
@@ -114,8 +107,9 @@ export default function App() {
         body: JSON.stringify({
           afterDate: after || undefined,
           beforeDate: before || undefined,
-          includeLabels: includeLabels.length ? includeLabels : undefined,
-          excludeLabels: excludeLabels.length ? excludeLabels : undefined,
+          searchSubject: searchSubject.trim() || undefined,
+          searchBody: searchBody.trim() || undefined,
+          searchFrom: searchFrom.trim() || undefined,
           unreadOnly,
         }),
       });
@@ -362,42 +356,26 @@ export default function App() {
                   Uses Claude Haiku 4.5 to analyze property photos in PDFs. ~3 cents per 20 images.
                 </div>
               </div>
-              {allLabels.length > 0 && (
-                <>
-                  <div className="filter-section">
-                    <div className="filter-heading">Include labels:</div>
-                    <div className="filter-chips">
-                      {allLabels.map((l) => (
-                        <span
-                          key={`inc-${l.name}`}
-                          className={`filter-chip ${includeLabels.includes(l.name) ? 'chip-active-include' : ''}`}
-                          onClick={() => setIncludeLabels((prev) =>
-                            prev.includes(l.name) ? prev.filter(n => n !== l.name) : [...prev, l.name]
-                          )}
-                        >
-                          {l.name}
-                        </span>
-                      ))}
-                    </div>
+              <div className="filter-section">
+                <div className="filter-heading">Search criteria:</div>
+                <div className="search-fields">
+                  <label className="search-field">
+                    <span>Subject:</span>
+                    <input type="text" placeholder="e.g. detached bungalow" value={searchSubject} onChange={(e) => setSearchSubject(e.target.value)} className="search-input" />
+                  </label>
+                  <label className="search-field">
+                    <span>Body:</span>
+                    <input type="text" placeholder="e.g. garden parking" value={searchBody} onChange={(e) => setSearchBody(e.target.value)} className="search-input" />
+                  </label>
+                  <label className="search-field">
+                    <span>From:</span>
+                    <input type="text" placeholder="e.g. rightmove zoopla" value={searchFrom} onChange={(e) => setSearchFrom(e.target.value)} className="search-input" />
+                  </label>
+                  <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                    Enter one or more words separated by spaces. All words must match.
                   </div>
-                  <div className="filter-section">
-                    <div className="filter-heading">Exclude labels:</div>
-                    <div className="filter-chips">
-                      {allLabels.map((l) => (
-                        <span
-                          key={`exc-${l.name}`}
-                          className={`filter-chip ${excludeLabels.includes(l.name) ? 'chip-active-exclude' : ''}`}
-                          onClick={() => setExcludeLabels((prev) =>
-                            prev.includes(l.name) ? prev.filter(n => n !== l.name) : [...prev, l.name]
-                          )}
-                        >
-                          {l.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+                </div>
+              </div>
             </div>
           )}
         </>
