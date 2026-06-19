@@ -100,6 +100,60 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .status { margin-top: 0.75rem; font-size: 0.9rem; color: #666; }
 
+.property-cards {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.property-card {
+  display: flex;
+  gap: 0.6rem;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s;
+}
+.property-card:hover { border-color: #1a73e8; }
+
+.property-img {
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.property-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-start;
+  align-content: flex-start;
+}
+
+.property-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.chip-price { background: #e6f4ea; color: #137333; }
+.chip-beds { background: #e8eaf6; color: #3949ab; }
+.chip-type { background: #fce4ec; color: #ad1457; }
+
+.property-address {
+  width: 100%;
+  font-size: 0.8rem;
+  color: #555;
+}
+
 .reasoning-list {
   margin: 0.5rem 0 0 1.2rem;
   padding: 0;

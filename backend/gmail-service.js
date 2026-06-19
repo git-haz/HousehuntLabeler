@@ -1,3 +1,5 @@
+import { extractPropertyLinks, scrapePropertyDetails } from './property-scraper.js';
+
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 async function gmailFetch(path, accessToken, options = {}) {
@@ -78,10 +80,18 @@ export async function retrieveEmails(accessToken) {
     const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
     const snippet = msg.snippet || '';
     const hasPdf = hasPdfAttachment(msg.payload);
-    const bodyText = decodeBody(msg.payload).toLowerCase();
+    const rawBody = decodeBody(msg.payload);
+    const bodyText = rawBody.toLowerCase();
     const matchedKeywords = REJECT_KEYWORDS.filter(kw => bodyText.includes(kw));
 
-    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords });
+    const propertyLinks = extractPropertyLinks(rawBody);
+    const properties = [];
+    for (const link of propertyLinks) {
+      const details = await scrapePropertyDetails(link);
+      properties.push(details);
+    }
+
+    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords, properties });
   }
   return emails;
 }

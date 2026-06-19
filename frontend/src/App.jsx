@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const VERSION_HISTORY = [
+  { version: '1.4.0', date: '2026-06-19', changes: 'Property link detection and scraping: shows price, bedrooms, type, address as chips with direct links' },
   { version: '1.3.0', date: '2026-06-19', changes: 'New labeling rules: mark as read + "processed"; "reject" for keyword matches; "attachment" for PDFs; removed "to review" and "not detached"' },
   { version: '1.2.0', date: '2026-06-19', changes: 'Processing log with per-email reasoning for each label applied' },
   { version: '1.1.0', date: '2026-06-19', changes: 'Retrieve only unread inbox emails; two-step retrieve/process flow; version history' },
@@ -195,6 +196,23 @@ export default function App() {
                       <span key={kw} className="label-badge badge-keyword">{kw}</span>
                     ))}
                   </div>
+                  {e.properties?.length > 0 && (
+                    <div className="property-cards">
+                      {e.properties.map((p, pi) => (
+                        <a key={pi} href={p.url} target="_blank" rel="noopener noreferrer" className="property-card" onClick={(ev) => ev.stopPropagation()}>
+                          {p.image && <img src={p.image} alt="" className="property-img" />}
+                          <div className="property-info">
+                            {p.price && <span className="property-chip chip-price">{p.price}</span>}
+                            {p.bedrooms && <span className="property-chip chip-beds">{p.bedrooms}</span>}
+                            {p.type && <span className="property-chip chip-type">{p.type}</span>}
+                            {p.address && <div className="property-address">{p.address}</div>}
+                            {!p.price && !p.address && p.description && <div className="property-address">{p.description.slice(0, 120)}</div>}
+                            {p.error && <div className="property-address" style={{ color: '#d93025' }}>Could not fetch details</div>}
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
