@@ -68,6 +68,22 @@ async function downloadAttachment(accessToken, messageId, attachmentId) {
   return Buffer.from(data.data, 'base64url');
 }
 
+export async function applyLabel(accessToken, messageId, labelName) {
+  const data = await gmailFetch('/labels', accessToken);
+  let label = data.labels.find(l => l.name === labelName);
+  if (!label) {
+    label = await gmailFetch('/labels', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: labelName, labelListVisibility: 'labelShow', messageListVisibility: 'show' }),
+    });
+  }
+  await gmailFetch(`/messages/${messageId}/modify`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ addLabelIds: [label.id] }),
+  });
+  return label.name;
+}
+
 export async function downloadPdfAttachments(accessToken, messageId) {
   const msg = await gmailFetch(`/messages/${messageId}?format=full`, accessToken);
   const pdfParts = findPdfParts(msg.payload);

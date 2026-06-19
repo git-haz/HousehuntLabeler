@@ -506,6 +506,7 @@ export default function App() {
                     </span>
                     <span className="label-badge">{r.analysis.overall_classification}</span>
                     <span className="label-badge">{r.analysis.overall_confidence}% confidence</span>
+                    {r.analysis.appliedLabel && <span className="label-badge badge-applied">label applied: {r.analysis.appliedLabel}</span>}
                   </div>
                   {r.analysis.images?.map((img) => (
                     <div key={img.image_number} className="vision-image-result">

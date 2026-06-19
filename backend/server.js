@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { saveCredentials, loadCredentials } from './crypto-store.js';
-import { retrieveEmails, processSelectedEmails, fetchLabels, downloadPdfAttachments } from './gmail-service.js';
+import { retrieveEmails, processSelectedEmails, fetchLabels, downloadPdfAttachments, applyLabel } from './gmail-service.js';
 import { extractImagesFromPdf } from './pdf-images.js';
 import { analyzeImagesWithVision } from './vision-analyzer.js';
 
@@ -108,6 +108,10 @@ app.post('/vision-analyze', async (req, res) => {
         }
 
         const analysis = await analyzeImagesWithVision(anthropicApiKey, allImages);
+        if (analysis.label && !analysis.error) {
+          const appliedLabel = await applyLabel(token, id, analysis.label);
+          analysis.appliedLabel = appliedLabel;
+        }
         results.push({ id, subject: meta?.subject || id, analysis });
       } catch (err) {
         results.push({ id, subject: meta?.subject || id, error: err.message });
