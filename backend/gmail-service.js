@@ -52,6 +52,25 @@ function hasPdfAttachment(payload) {
 
 const REJECT_KEYWORDS = ['terraced', 'link-attached', 'end-terraced'];
 
+const SUFFOLK_INDICATORS = [
+  'suffolk', 'ipswich', 'bury st edmunds', 'lowestoft', 'felixstowe',
+  'woodbridge', 'aldeburgh', 'southwold', 'stowmarket', 'sudbury',
+  'hadleigh', 'framlingham', 'leiston', 'saxmundham', 'eye',
+  'needham market', 'mildenhall', 'newmarket', 'haverhill', 'beccles',
+  'bungay', 'halesworth', 'debenham', 'lavenham', 'long melford',
+];
+
+function isInSuffolk(emailText, properties) {
+  const text = emailText.toLowerCase();
+  if (SUFFOLK_INDICATORS.some(s => text.includes(s))) return true;
+  for (const p of properties) {
+    const addr = (p.address || '').toLowerCase();
+    const desc = (p.description || '').toLowerCase();
+    if (SUFFOLK_INDICATORS.some(s => addr.includes(s) || desc.includes(s))) return true;
+  }
+  return false;
+}
+
 async function ensureLabel(accessToken, name) {
   const data = await gmailFetch('/labels', accessToken);
   const existing = data.labels.find(l => l.name === name);
@@ -91,7 +110,8 @@ export async function retrieveEmails(accessToken) {
       properties.push(details);
     }
 
-    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords, properties });
+    const inSuffolk = isInSuffolk(rawBody, properties);
+    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords, properties, inSuffolk, _bodyText: rawBody });
   }
   return emails;
 }
@@ -106,9 +126,17 @@ export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
   for (const id of emailIds) {
     const meta = emailMeta.find(e => e.id === id);
     const labelsToAdd = [labelProcessedId];
-    const labelsToRemove = ['UNREAD'];
+    const labelsToRemove = [];
     const appliedNames = ['processed'];
-    const reasoning = ['Marked as read.', 'Added "processed" — applied to all processed emails.'];
+    const reasoning = ['Added "processed" — applied to all processed emails.'];
+
+    const suffolk = isInSuffolk(meta?._bodyText || '', meta?.properties || []);
+    if (suffolk) {
+      reasoning.push('Kept as unread — property is in Suffolk.');
+    } else {
+      labelsToRemove.push('UNREAD');
+      reasoning.push('Marked as read.');
+    }
 
     if (meta?.hasPdf) {
       labelsToAdd.push(labelAttachmentId);
@@ -122,9 +150,12 @@ export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
       reasoning.push(`Added "reject" — body contains: ${meta.matchedKeywords.join(', ')}.`);
     }
 
+    const modifyBody = { addLabelIds: labelsToAdd };
+    if (labelsToRemove.length > 0) modifyBody.removeLabelIds = labelsToRemove;
+
     await gmailFetch(`/messages/${id}/modify`, accessToken, {
       method: 'POST',
-      body: JSON.stringify({ addLabelIds: labelsToAdd, removeLabelIds: labelsToRemove }),
+      body: JSON.stringify(modifyBody),
     });
 
     results.push({ id, subject: meta?.subject || id, labels: appliedNames, hasPdf: meta?.hasPdf, matchedKeywords: meta?.matchedKeywords || [], reasoning });

@@ -31,13 +31,29 @@ const PORTAL_SELECTORS = {
 };
 
 const LINK_REGEX = /https?:\/\/[^\s<>"')\]]+/gi;
+const PROPERTY_PATH_PATTERNS = ['/property/', '/properties/'];
+const IGNORED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico', '.pdf'];
 
 export function extractPropertyLinks(text) {
   const matches = text.match(LINK_REGEX) || [];
+  const seen = new Set();
   return matches.filter(url => {
     try {
-      const hostname = new URL(url).hostname;
-      return PROPERTY_DOMAINS.some(d => hostname.includes(d));
+      const parsed = new URL(url);
+      const hostname = parsed.hostname;
+      const pathname = parsed.pathname.toLowerCase();
+
+      if (IGNORED_EXTENSIONS.some(ext => pathname.endsWith(ext))) return false;
+      if (seen.has(parsed.origin + parsed.pathname)) return false;
+
+      const domainMatch = PROPERTY_DOMAINS.some(d => hostname.includes(d));
+      const pathMatch = PROPERTY_PATH_PATTERNS.some(p => pathname.includes(p));
+
+      if (domainMatch || pathMatch) {
+        seen.add(parsed.origin + parsed.pathname);
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }

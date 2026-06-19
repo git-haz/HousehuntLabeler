@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const VERSION_HISTORY = [
+  { version: '1.5.0', date: '2026-06-19', changes: 'Broader property link detection via /property/ path; Suffolk location detection keeps emails unread' },
   { version: '1.4.0', date: '2026-06-19', changes: 'Property link detection and scraping: shows price, bedrooms, type, address as chips with direct links' },
   { version: '1.3.0', date: '2026-06-19', changes: 'New labeling rules: mark as read + "processed"; "reject" for keyword matches; "attachment" for PDFs; removed "to review" and "not detached"' },
   { version: '1.2.0', date: '2026-06-19', changes: 'Processing log with per-email reasoning for each label applied' },
@@ -192,6 +193,7 @@ export default function App() {
                   <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '4px' }}>{e.snippet}</div>
                   <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                     {e.hasPdf && <span className="label-badge badge-pdf">PDF</span>}
+                    {e.inSuffolk && <span className="label-badge badge-suffolk">Suffolk</span>}
                     {e.matchedKeywords.map((kw) => (
                       <span key={kw} className="label-badge badge-keyword">{kw}</span>
                     ))}

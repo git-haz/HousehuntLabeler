@@ -65,6 +65,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .badge-pdf { background: #fce4ec; color: #c62828; }
 .badge-keyword { background: #fff3e0; color: #e65100; }
+.badge-suffolk { background: #e8f5e9; color: #2e7d32; }
 
 .log-panel {
   margin-top: 1.5rem;
