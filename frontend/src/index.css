@@ -35,8 +35,36 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-process {
   background: #34a853;
   color: #fff;
-  margin-top: 1rem;
 }
+
+.btn-label {
+  background: #1a73e8;
+  color: #fff;
+}
+
+.btn-small {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  background: #eee;
+  color: #333;
+  border-radius: 4px;
+}
+
+.email-card {
+  background: #fff;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: border-color 0.15s;
+}
+.email-card:hover { border-color: #c5cae9; }
+.email-selected { border-color: #1a73e8; background: #e8f0fe; }
+
+.badge-pdf { background: #fce4ec; color: #c62828; }
+.badge-keyword { background: #fff3e0; color: #e65100; }
 
 .log-panel {
   margin-top: 1.5rem;
@@ -71,3 +99,32 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .status { margin-top: 0.75rem; font-size: 0.9rem; color: #666; }
+
+.version-footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+.version-link {
+  font-size: 0.75rem;
+  color: #aaa;
+  cursor: pointer;
+}
+.version-link:hover { color: #666; }
+
+.version-history {
+  margin-top: 0.75rem;
+  text-align: left;
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.version-entry {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.version-entry:last-child { border-bottom: none; }

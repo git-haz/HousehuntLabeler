@@ -2,24 +2,18 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { saveCredentials, loadCredentials } from './crypto-store.js';
-import { buildGmailClient, exchangeCodeForTokens, processEmails } from './gmail-service.js';
+import { retrieveEmails, processSelectedEmails } from './gmail-service.js';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
 
 let accessToken = null;
+let cachedEmails = [];
 
 app.post('/auth/token', async (req, res) => {
   try {
-    const { access_token, code } = req.body;
-
-    if (code) {
-      const tokens = await exchangeCodeForTokens(code);
-      saveCredentials(tokens);
-      accessToken = tokens.access_token;
-      return res.json({ ok: true, message: 'Tokens exchanged and stored.' });
-    }
+    const { access_token } = req.body;
 
     if (access_token) {
       accessToken = access_token;
@@ -27,25 +21,37 @@ app.post('/auth/token', async (req, res) => {
       return res.json({ ok: true, message: 'Access token stored.' });
     }
 
-    return res.status(400).json({ error: 'Provide access_token or code.' });
+    return res.status(400).json({ error: 'Provide access_token.' });
   } catch (err) {
     console.error('Auth error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/process', async (_req, res) => {
+app.post('/retrieve', async (_req, res) => {
   try {
     const stored = loadCredentials();
-    const tokens = stored || {};
-    if (accessToken) tokens.access_token = accessToken;
+    const token = accessToken || stored?.access_token;
+    if (!token) return res.status(401).json({ error: 'Not authenticated.' });
 
-    if (!tokens.access_token) {
-      return res.status(401).json({ error: 'Not authenticated. Send token first.' });
-    }
+    cachedEmails = await retrieveEmails(token);
+    res.json({ ok: true, emails: cachedEmails });
+  } catch (err) {
+    console.error('Retrieve error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const gmail = buildGmailClient(tokens);
-    const results = await processEmails(gmail);
+app.post('/process', async (req, res) => {
+  try {
+    const { emailIds } = req.body;
+    if (!emailIds?.length) return res.status(400).json({ error: 'No emails selected.' });
+
+    const stored = loadCredentials();
+    const token = accessToken || stored?.access_token;
+    if (!token) return res.status(401).json({ error: 'Not authenticated.' });
+
+    const results = await processSelectedEmails(token, emailIds, cachedEmails);
     res.json({ ok: true, results });
   } catch (err) {
     console.error('Process error:', err.message);

@@ -1,34 +1,20 @@
-import { google } from 'googleapis';
+const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
-function getOAuth2Client() {
-  return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    'http://localhost:5173'
-  );
-}
-
-export function buildGmailClient(tokens) {
-  const auth = getOAuth2Client();
-  auth.setCredentials(tokens);
-  return google.gmail({ version: 'v1', auth });
-}
-
-export async function exchangeCodeForTokens(code) {
-  const auth = getOAuth2Client();
-  const { tokens } = await auth.getToken(code);
-  return tokens;
-}
-
-async function ensureLabel(gmail, name) {
-  const { data } = await gmail.users.labels.list({ userId: 'me' });
-  const existing = data.labels.find(l => l.name === name);
-  if (existing) return existing.id;
-  const { data: created } = await gmail.users.labels.create({
-    userId: 'me',
-    requestBody: { name, labelListVisibility: 'labelShow', messageListVisibility: 'show' },
+async function gmailFetch(path, accessToken, options = {}) {
+  const url = path.startsWith('http') ? path : `${BASE}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
-  return created.id;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gmail API ${res.status}: ${text}`);
+  }
+  return res.json();
 }
 
 function decodeBody(payload) {
@@ -64,43 +50,71 @@ function hasPdfAttachment(payload) {
 
 const REJECT_KEYWORDS = ['terraced', 'link-attached', 'end-terraced'];
 
-export async function processEmails(gmail) {
-  const labelToReviewId = await ensureLabel(gmail, 'to review');
-  const labelAttachmentId = await ensureLabel(gmail, 'attachment');
-  const labelRejectId = await ensureLabel(gmail, 'reject');
-  const labelNotDetachedId = await ensureLabel(gmail, 'not detached');
+async function ensureLabel(accessToken, name) {
+  const data = await gmailFetch('/labels', accessToken);
+  const existing = data.labels.find(l => l.name === name);
+  if (existing) return existing.id;
+  const created = await gmailFetch('/labels', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ name, labelListVisibility: 'labelShow', messageListVisibility: 'show' }),
+  });
+  return created.id;
+}
 
-  const listRes = await gmail.users.messages.list({ userId: 'me', maxResults: 10 });
-  const messageIds = (listRes.data.messages || []).map(m => m.id);
+export async function retrieveEmails(accessToken) {
+  const listData = await gmailFetch('/messages?maxResults=10&q=is%3Aunread+in%3Ainbox', accessToken);
+  const messageIds = (listData.messages || []).map(m => m.id);
+
+  const emails = [];
+  for (const id of messageIds) {
+    const msg = await gmailFetch(`/messages/${id}?format=full`, accessToken);
+    const allowedLabels = new Set(['INBOX', 'UNREAD', 'CATEGORY_PRIMARY', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS']);
+    const msgLabels = msg.labelIds || [];
+    if (msgLabels.some(l => !allowedLabels.has(l))) continue;
+
+    const headers = msg.payload.headers || [];
+    const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '(no subject)';
+    const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
+    const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
+    const snippet = msg.snippet || '';
+    const hasPdf = hasPdfAttachment(msg.payload);
+    const bodyText = decodeBody(msg.payload).toLowerCase();
+    const matchedKeywords = REJECT_KEYWORDS.filter(kw => bodyText.includes(kw));
+
+    emails.push({ id, subject, from, date, snippet, hasPdf, matchedKeywords });
+  }
+  return emails;
+}
+
+export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
+  const labelToReviewId = await ensureLabel(accessToken, 'to review');
+  const labelAttachmentId = await ensureLabel(accessToken, 'attachment');
+  const labelRejectId = await ensureLabel(accessToken, 'reject');
+  const labelNotDetachedId = await ensureLabel(accessToken, 'not detached');
 
   const results = [];
 
-  for (const id of messageIds) {
-    const { data: msg } = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
-    const subject = (msg.payload.headers || []).find(h => h.name.toLowerCase() === 'subject')?.value || '(no subject)';
+  for (const id of emailIds) {
+    const meta = emailMeta.find(e => e.id === id);
     const labelsToAdd = [labelToReviewId];
     const appliedNames = ['to review'];
 
-    const hasPdf = hasPdfAttachment(msg.payload);
-    if (hasPdf) {
+    if (meta?.hasPdf) {
       labelsToAdd.push(labelAttachmentId);
       appliedNames.push('attachment');
     }
 
-    const bodyText = decodeBody(msg.payload).toLowerCase();
-    const matchedKeywords = REJECT_KEYWORDS.filter(kw => bodyText.includes(kw));
-    if (matchedKeywords.length > 0) {
+    if (meta?.matchedKeywords?.length > 0) {
       labelsToAdd.push(labelRejectId, labelNotDetachedId);
       appliedNames.push('reject', 'not detached');
     }
 
-    await gmail.users.messages.modify({
-      userId: 'me',
-      id,
-      requestBody: { addLabelIds: labelsToAdd },
+    await gmailFetch(`/messages/${id}/modify`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ addLabelIds: labelsToAdd }),
     });
 
-    results.push({ id, subject, labels: appliedNames, hasPdf, matchedKeywords });
+    results.push({ id, subject: meta?.subject || id, labels: appliedNames, hasPdf: meta?.hasPdf, matchedKeywords: meta?.matchedKeywords || [] });
   }
 
   return results;

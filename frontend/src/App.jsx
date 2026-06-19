@@ -2,12 +2,21 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const VERSION = '1.1.0';
+const VERSION_HISTORY = [
+  { version: '1.1.0', date: '2026-06-19', changes: 'Retrieve only unread inbox emails; two-step retrieve/process flow; version history' },
+  { version: '1.0.0', date: '2026-06-19', changes: 'Initial release with Gmail OAuth, email labeling, PDF detection, keyword scanning' },
+];
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [emails, setEmails] = useState([]);
+  const [selected, setSelected] = useState(new Set());
   const [results, setResults] = useState([]);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const tokenClientRef = useRef(null);
 
   const log = useCallback((msg) => {
@@ -55,22 +64,68 @@ export default function App() {
     if (tokenClientRef.current) {
       tokenClientRef.current.requestAccessToken();
     } else {
-      log('Google Identity Services not loaded yet. Check VITE_GOOGLE_CLIENT_ID.');
+      log('Google Identity Services not loaded yet.');
+    }
+  };
+
+  const handleRetrieve = async () => {
+    setLoading(true);
+    setEmails([]);
+    setSelected(new Set());
+    setResults([]);
+    log('Retrieving 10 oldest emails...');
+    try {
+      const res = await fetch(`${BACKEND}/retrieve`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setEmails(data.emails);
+        log(`Retrieved ${data.emails.length} emails.`);
+      } else {
+        log(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      log(`Network error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === emails.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(emails.map((e) => e.id)));
     }
   };
 
   const handleProcess = async () => {
+    if (selected.size === 0) {
+      log('No emails selected.');
+      return;
+    }
     setProcessing(true);
-    setResults([]);
-    log('Processing 10 oldest emails...');
+    log(`Processing ${selected.size} selected emails...`);
     try {
-      const res = await fetch(`${BACKEND}/process`, { method: 'POST' });
+      const res = await fetch(`${BACKEND}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailIds: [...selected] }),
+      });
       const data = await res.json();
       if (data.ok) {
         setResults(data.results);
-        log(`Done. Processed ${data.results.length} emails.`);
+        log(`Done. Labeled ${data.results.length} emails.`);
         data.results.forEach((r) => {
-          log(`  ${r.id} — labels: [${r.labels.join(', ')}]${r.hasPdf ? ' 📎PDF' : ''}${r.matchedKeywords.length ? ` ⚠️keywords: ${r.matchedKeywords.join(', ')}` : ''}`);
+          log(`  ${r.id} — labels: [${r.labels.join(', ')}]${r.hasPdf ? ' PDF' : ''}${r.matchedKeywords.length ? ` keywords: ${r.matchedKeywords.join(', ')}` : ''}`);
         });
       } else {
         log(`Error: ${data.error}`);
@@ -87,17 +142,62 @@ export default function App() {
       <h1>HousehuntLabeler</h1>
 
       {!authenticated ? (
-        <button className="btn-google" onClick={handleSignIn}>
-          Sign in with Google
-        </button>
+        <button className="btn-google" onClick={handleSignIn}>Sign in with Google</button>
       ) : (
-        <p className="status">✓ Signed in</p>
+        <p className="status">Signed in</p>
       )}
 
       {authenticated && (
-        <button className="btn-process" onClick={handleProcess} disabled={processing}>
-          {processing ? 'Processing...' : 'Process 10 Oldest Emails'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+          <button className="btn-process" onClick={handleRetrieve} disabled={loading}>
+            {loading ? 'Retrieving...' : 'Retrieve 10 Oldest Emails'}
+          </button>
+          {emails.length > 0 && (
+            <button className="btn-label" onClick={handleProcess} disabled={processing || selected.size === 0}>
+              {processing ? 'Processing...' : `Process ${selected.size} Selected`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {emails.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Emails</h2>
+            <button className="btn-small" onClick={toggleAll}>
+              {selected.size === emails.length ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          {emails.map((e) => (
+            <div
+              key={e.id}
+              className={`email-card ${selected.has(e.id) ? 'email-selected' : ''}`}
+              onClick={() => toggleSelect(e.id)}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <input
+                  type="checkbox"
+                  checked={selected.has(e.id)}
+                  onChange={() => toggleSelect(e.id)}
+                  onClick={(ev) => ev.stopPropagation()}
+                  style={{ marginTop: '3px' }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{e.subject}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#666' }}>{e.from}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '2px' }}>{e.date}</div>
+                  <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '4px' }}>{e.snippet}</div>
+                  <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    {e.hasPdf && <span className="label-badge badge-pdf">PDF</span>}
+                    {e.matchedKeywords.map((kw) => (
+                      <span key={kw} className="label-badge badge-keyword">{kw}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {results.length > 0 && (
@@ -112,12 +212,6 @@ export default function App() {
                   <span key={l} className="label-badge">{l}</span>
                 ))}
               </div>
-              {r.hasPdf && <div style={{ marginTop: '0.3rem', fontSize: '0.85rem' }}>📎 PDF attachment detected</div>}
-              {r.matchedKeywords.length > 0 && (
-                <div style={{ marginTop: '0.3rem', fontSize: '0.85rem', color: '#d93025' }}>
-                  ⚠️ Keywords found: {r.matchedKeywords.join(', ')}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -130,6 +224,22 @@ export default function App() {
           ))}
         </div>
       )}
+
+      <footer className="version-footer">
+        <span className="version-link" onClick={() => setShowVersionHistory(!showVersionHistory)}>
+          v{VERSION}
+        </span>
+        {showVersionHistory && (
+          <div className="version-history">
+            {VERSION_HISTORY.map((v) => (
+              <div key={v.version} className="version-entry">
+                <strong>v{v.version}</strong> <span style={{ color: '#999' }}>({v.date})</span>
+                <div style={{ fontSize: '0.85rem', color: '#555' }}>{v.changes}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </footer>
     </div>
   );
 }
