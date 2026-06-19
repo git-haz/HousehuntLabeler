@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 const VERSION_HISTORY = [
+  { version: '1.6.0', date: '2026-06-19', changes: 'Date filter for retrieving emails newer than a chosen date' },
   { version: '1.5.0', date: '2026-06-19', changes: 'Broader property link detection via /property/ path; Suffolk location detection keeps emails unread' },
   { version: '1.4.0', date: '2026-06-19', changes: 'Property link detection and scraping: shows price, bedrooms, type, address as chips with direct links' },
   { version: '1.3.0', date: '2026-06-19', changes: 'New labeling rules: mark as read + "processed"; "reject" for keyword matches; "attachment" for PDFs; removed "to review" and "not detached"' },
@@ -20,6 +21,7 @@ export default function App() {
   const [emails, setEmails] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [results, setResults] = useState([]);
+  const [afterDate, setAfterDate] = useState('');
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const tokenClientRef = useRef(null);
 
@@ -79,7 +81,11 @@ export default function App() {
     setResults([]);
     log('Retrieving 10 oldest emails...');
     try {
-      const res = await fetch(`${BACKEND}/retrieve`, { method: 'POST' });
+      const res = await fetch(`${BACKEND}/retrieve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ afterDate: afterDate || undefined }),
+      });
       const data = await res.json();
       if (data.ok) {
         setEmails(data.emails);
@@ -152,9 +158,13 @@ export default function App() {
       )}
 
       {authenticated && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label className="date-label">
+            After:
+            <input type="date" value={afterDate} onChange={(e) => setAfterDate(e.target.value)} className="date-input" />
+          </label>
           <button className="btn-process" onClick={handleRetrieve} disabled={loading}>
-            {loading ? 'Retrieving...' : 'Retrieve 10 Oldest Emails'}
+            {loading ? 'Retrieving...' : 'Retrieve Emails'}
           </button>
           {emails.length > 0 && (
             <button className="btn-label" onClick={handleProcess} disabled={processing || selected.size === 0}>

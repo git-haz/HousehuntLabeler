@@ -82,8 +82,10 @@ async function ensureLabel(accessToken, name) {
   return created.id;
 }
 
-export async function retrieveEmails(accessToken) {
-  const listData = await gmailFetch('/messages?maxResults=10&q=is%3Aunread+in%3Ainbox', accessToken);
+export async function retrieveEmails(accessToken, afterDate) {
+  let q = 'is:unread in:inbox';
+  if (afterDate) q += ` after:${afterDate}`;
+  const listData = await gmailFetch(`/messages?maxResults=10&q=${encodeURIComponent(q)}`, accessToken);
   const messageIds = (listData.messages || []).map(m => m.id);
 
   const emails = [];

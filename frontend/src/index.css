@@ -67,6 +67,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge-keyword { background: #fff3e0; color: #e65100; }
 .badge-suffolk { background: #e8f5e9; color: #2e7d32; }
 
+.date-label {
+  font-size: 0.85rem;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.date-input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
 .log-panel {
   margin-top: 1.5rem;
   background: #1e1e1e;

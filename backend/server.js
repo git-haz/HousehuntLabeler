@@ -28,13 +28,14 @@ app.post('/auth/token', async (req, res) => {
   }
 });
 
-app.post('/retrieve', async (_req, res) => {
+app.post('/retrieve', async (req, res) => {
   try {
     const stored = loadCredentials();
     const token = accessToken || stored?.access_token;
     if (!token) return res.status(401).json({ error: 'Not authenticated.' });
 
-    cachedEmails = await retrieveEmails(token);
+    const { afterDate } = req.body;
+    cachedEmails = await retrieveEmails(token, afterDate);
     res.json({ ok: true, emails: cachedEmails });
   } catch (err) {
     console.error('Retrieve error:', err.message);
