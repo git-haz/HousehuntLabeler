@@ -82,8 +82,20 @@ async function ensureLabel(accessToken, name) {
   return created.id;
 }
 
-export async function retrieveEmails(accessToken, afterDate, beforeDate) {
-  let q = 'is:unread in:inbox -label:processed';
+export async function fetchLabels(accessToken) {
+  const data = await gmailFetch('/labels', accessToken);
+  return (data.labels || [])
+    .filter(l => l.type === 'user' || ['INBOX', 'UNREAD', 'STARRED', 'IMPORTANT', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'CATEGORY_PRIMARY', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(l.id))
+    .map(l => ({ id: l.id, name: l.name, type: l.type }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function retrieveEmails(accessToken, opts = {}) {
+  const { afterDate, beforeDate, includeLabels, excludeLabels, unreadOnly = true } = opts;
+  let q = 'in:inbox -label:processed';
+  if (unreadOnly) q += ' is:unread';
+  if (includeLabels?.length) q += includeLabels.map(l => ` label:${l.replace(/\s+/g, '-')}`).join('');
+  if (excludeLabels?.length) q += excludeLabels.map(l => ` -label:${l.replace(/\s+/g, '-')}`).join('');
   if (afterDate) q += ` after:${afterDate}`;
   if (beforeDate) q += ` before:${beforeDate}`;
   const listData = await gmailFetch(`/messages?maxResults=50&q=${encodeURIComponent(q)}`, accessToken);

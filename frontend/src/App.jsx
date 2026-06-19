@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const VERSION_HISTORY = [
+  { version: '1.8.0', date: '2026-06-19', changes: 'Label filters: include/exclude labels when retrieving; toggle unread-only vs all emails' },
   { version: '1.7.0', date: '2026-06-19', changes: 'Show Newer / Show Older navigation buttons to page through emails; exclude already-processed emails' },
   { version: '1.6.0', date: '2026-06-19', changes: 'Date filter for retrieving emails newer than a chosen date' },
   { version: '1.5.0', date: '2026-06-19', changes: 'Broader property link detection via /property/ path; Suffolk location detection keeps emails unread' },
@@ -23,6 +24,11 @@ export default function App() {
   const [selected, setSelected] = useState(new Set());
   const [results, setResults] = useState([]);
   const [afterDate, setAfterDate] = useState('');
+  const [allLabels, setAllLabels] = useState([]);
+  const [includeLabels, setIncludeLabels] = useState([]);
+  const [excludeLabels, setExcludeLabels] = useState([]);
+  const [unreadOnly, setUnreadOnly] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const tokenClientRef = useRef(null);
 
@@ -54,6 +60,14 @@ export default function App() {
               if (data.ok) {
                 setAuthenticated(true);
                 log('Authenticated successfully.');
+                try {
+                  const labelsRes = await fetch(`${BACKEND}/labels`);
+                  const labelsData = await labelsRes.json();
+                  if (labelsData.ok) {
+                    setAllLabels(labelsData.labels);
+                    log(`Loaded ${labelsData.labels.length} labels.`);
+                  }
+                } catch {}
               } else {
                 log(`Backend error: ${data.error}`);
               }
@@ -84,7 +98,13 @@ export default function App() {
       const res = await fetch(`${BACKEND}/retrieve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ afterDate: after || undefined, beforeDate: before || undefined }),
+        body: JSON.stringify({
+          afterDate: after || undefined,
+          beforeDate: before || undefined,
+          includeLabels: includeLabels.length ? includeLabels : undefined,
+          excludeLabels: excludeLabels.length ? excludeLabels : undefined,
+          unreadOnly,
+        }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -183,20 +203,71 @@ export default function App() {
       )}
 
       {authenticated && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label className="date-label">
-            After:
-            <input type="date" value={afterDate} onChange={(e) => setAfterDate(e.target.value)} className="date-input" />
-          </label>
-          <button className="btn-process" onClick={handleRetrieve} disabled={loading}>
-            {loading ? 'Retrieving...' : 'Retrieve Emails'}
-          </button>
-          {emails.length > 0 && (
-            <button className="btn-label" onClick={handleProcess} disabled={processing || selected.size === 0}>
-              {processing ? 'Processing...' : `Process ${selected.size} Selected`}
+        <>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="date-label">
+              After:
+              <input type="date" value={afterDate} onChange={(e) => setAfterDate(e.target.value)} className="date-input" />
+            </label>
+            <button className="btn-process" onClick={handleRetrieve} disabled={loading}>
+              {loading ? 'Retrieving...' : 'Retrieve Emails'}
             </button>
+            {emails.length > 0 && (
+              <button className="btn-label" onClick={handleProcess} disabled={processing || selected.size === 0}>
+                {processing ? 'Processing...' : `Process ${selected.size} Selected`}
+              </button>
+            )}
+            <button className="btn-small" onClick={() => setShowFilters(!showFilters)}>
+              {showFilters ? 'Hide Filters' : 'Filters'}
+            </button>
+          </div>
+          {showFilters && (
+            <div className="filter-panel">
+              <div className="filter-row">
+                <label className="filter-toggle">
+                  <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
+                  Unread only
+                </label>
+              </div>
+              {allLabels.length > 0 && (
+                <>
+                  <div className="filter-section">
+                    <div className="filter-heading">Include labels:</div>
+                    <div className="filter-chips">
+                      {allLabels.map((l) => (
+                        <span
+                          key={`inc-${l.name}`}
+                          className={`filter-chip ${includeLabels.includes(l.name) ? 'chip-active-include' : ''}`}
+                          onClick={() => setIncludeLabels((prev) =>
+                            prev.includes(l.name) ? prev.filter(n => n !== l.name) : [...prev, l.name]
+                          )}
+                        >
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="filter-section">
+                    <div className="filter-heading">Exclude labels:</div>
+                    <div className="filter-chips">
+                      {allLabels.map((l) => (
+                        <span
+                          key={`exc-${l.name}`}
+                          className={`filter-chip ${excludeLabels.includes(l.name) ? 'chip-active-exclude' : ''}`}
+                          onClick={() => setExcludeLabels((prev) =>
+                            prev.includes(l.name) ? prev.filter(n => n !== l.name) : [...prev, l.name]
+                          )}
+                        >
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {emails.length > 0 && (

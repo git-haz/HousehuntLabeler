@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { saveCredentials, loadCredentials } from './crypto-store.js';
-import { retrieveEmails, processSelectedEmails } from './gmail-service.js';
+import { retrieveEmails, processSelectedEmails, fetchLabels } from './gmail-service.js';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));
@@ -28,14 +28,28 @@ app.post('/auth/token', async (req, res) => {
   }
 });
 
+app.get('/labels', async (_req, res) => {
+  try {
+    const stored = loadCredentials();
+    const token = accessToken || stored?.access_token;
+    if (!token) return res.status(401).json({ error: 'Not authenticated.' });
+
+    const data = await fetchLabels(token);
+    res.json({ ok: true, labels: data });
+  } catch (err) {
+    console.error('Labels error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/retrieve', async (req, res) => {
   try {
     const stored = loadCredentials();
     const token = accessToken || stored?.access_token;
     if (!token) return res.status(401).json({ error: 'Not authenticated.' });
 
-    const { afterDate, beforeDate } = req.body;
-    cachedEmails = await retrieveEmails(token, afterDate, beforeDate);
+    const { afterDate, beforeDate, includeLabels, excludeLabels, unreadOnly } = req.body;
+    cachedEmails = await retrieveEmails(token, { afterDate, beforeDate, includeLabels, excludeLabels, unreadOnly });
     res.json({ ok: true, emails: cachedEmails });
   } catch (err) {
     console.error('Retrieve error:', err.message);
