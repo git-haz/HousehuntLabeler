@@ -87,40 +87,35 @@ export async function retrieveEmails(accessToken) {
 }
 
 export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
-  const labelToReviewId = await ensureLabel(accessToken, 'to review');
+  const labelProcessedId = await ensureLabel(accessToken, 'processed');
   const labelAttachmentId = await ensureLabel(accessToken, 'attachment');
   const labelRejectId = await ensureLabel(accessToken, 'reject');
-  const labelNotDetachedId = await ensureLabel(accessToken, 'not detached');
 
   const results = [];
 
   for (const id of emailIds) {
     const meta = emailMeta.find(e => e.id === id);
-    const labelsToAdd = [labelToReviewId];
-    const appliedNames = ['to review'];
+    const labelsToAdd = [labelProcessedId];
+    const labelsToRemove = ['UNREAD'];
+    const appliedNames = ['processed'];
+    const reasoning = ['Marked as read.', 'Added "processed" — applied to all processed emails.'];
 
     if (meta?.hasPdf) {
       labelsToAdd.push(labelAttachmentId);
       appliedNames.push('attachment');
+      reasoning.push('Added "attachment" — email contains a PDF attachment.');
     }
 
     if (meta?.matchedKeywords?.length > 0) {
-      labelsToAdd.push(labelRejectId, labelNotDetachedId);
-      appliedNames.push('reject', 'not detached');
+      labelsToAdd.push(labelRejectId);
+      appliedNames.push('reject');
+      reasoning.push(`Added "reject" — body contains: ${meta.matchedKeywords.join(', ')}.`);
     }
 
     await gmailFetch(`/messages/${id}/modify`, accessToken, {
       method: 'POST',
-      body: JSON.stringify({ addLabelIds: labelsToAdd }),
+      body: JSON.stringify({ addLabelIds: labelsToAdd, removeLabelIds: labelsToRemove }),
     });
-
-    const reasoning = ['Added "to review" — applied to all processed emails.'];
-    if (meta?.hasPdf) {
-      reasoning.push('Added "attachment" — email contains a PDF attachment.');
-    }
-    if (meta?.matchedKeywords?.length > 0) {
-      reasoning.push(`Added "reject" + "not detached" — body contains: ${meta.matchedKeywords.join(', ')}.`);
-    }
 
     results.push({ id, subject: meta?.subject || id, labels: appliedNames, hasPdf: meta?.hasPdf, matchedKeywords: meta?.matchedKeywords || [], reasoning });
   }

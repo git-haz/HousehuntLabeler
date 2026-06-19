@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const VERSION_HISTORY = [
+  { version: '1.3.0', date: '2026-06-19', changes: 'New labeling rules: mark as read + "processed"; "reject" for keyword matches; "attachment" for PDFs; removed "to review" and "not detached"' },
   { version: '1.2.0', date: '2026-06-19', changes: 'Processing log with per-email reasoning for each label applied' },
   { version: '1.1.0', date: '2026-06-19', changes: 'Retrieve only unread inbox emails; two-step retrieve/process flow; version history' },
   { version: '1.0.0', date: '2026-06-19', changes: 'Initial release with Gmail OAuth, email labeling, PDF detection, keyword scanning' },
