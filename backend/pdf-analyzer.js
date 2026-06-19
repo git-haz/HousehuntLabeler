@@ -1,4 +1,6 @@
-import pdf from 'pdf-parse/lib/pdf-parse.js';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const pdf = require('pdf-parse');
 
 const DETACHED_KEYWORDS = ['detached house', 'detached property', 'detached home', 'fully detached'];
 const BUNGALOW_KEYWORDS = ['detached bungalow', 'bungalow'];

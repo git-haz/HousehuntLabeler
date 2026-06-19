@@ -1,4 +1,6 @@
-import pdf from 'pdf-parse/lib/pdf-parse.js';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const pdf = require('pdf-parse');
 
 export async function extractImagesFromPdf(pdfBuffer) {
   const images = [];
