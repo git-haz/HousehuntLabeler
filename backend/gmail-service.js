@@ -68,6 +68,17 @@ async function downloadAttachment(accessToken, messageId, attachmentId) {
   return Buffer.from(data.data, 'base64url');
 }
 
+export async function downloadPdfAttachments(accessToken, messageId) {
+  const msg = await gmailFetch(`/messages/${messageId}?format=full`, accessToken);
+  const pdfParts = findPdfParts(msg.payload);
+  const pdfs = [];
+  for (const part of pdfParts) {
+    const buffer = await downloadAttachment(accessToken, messageId, part.attachmentId);
+    pdfs.push({ buffer, filename: part.filename });
+  }
+  return pdfs;
+}
+
 const REJECT_KEYWORDS = ['terraced', 'link-attached', 'end-terraced'];
 
 const SUFFOLK_INDICATORS = [

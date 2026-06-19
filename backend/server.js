@@ -2,7 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { saveCredentials, loadCredentials } from './crypto-store.js';
-import { retrieveEmails, processSelectedEmails, fetchLabels } from './gmail-service.js';
+import { retrieveEmails, processSelectedEmails, fetchLabels, downloadPdfAttachments } from './gmail-service.js';
+import { extractImagesFromPdf } from './pdf-images.js';
+import { analyzeImagesWithVision } from './vision-analyzer.js';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));
@@ -70,6 +72,51 @@ app.post('/process', async (req, res) => {
     res.json({ ok: true, results });
   } catch (err) {
     console.error('Process error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/vision-analyze', async (req, res) => {
+  try {
+    const { emailIds, anthropicApiKey } = req.body;
+    if (!anthropicApiKey) return res.status(400).json({ error: 'Anthropic API key required.' });
+    if (!emailIds?.length) return res.status(400).json({ error: 'No emails selected.' });
+
+    const stored = loadCredentials();
+    const token = accessToken || stored?.access_token;
+    if (!token) return res.status(401).json({ error: 'Not authenticated.' });
+
+    const results = [];
+    for (const id of emailIds) {
+      const meta = cachedEmails.find(e => e.id === id);
+      if (!meta?.hasPdf) {
+        results.push({ id, subject: meta?.subject || id, error: 'No PDF attachment.' });
+        continue;
+      }
+
+      try {
+        const pdfs = await downloadPdfAttachments(token, id);
+        let allImages = [];
+        for (const pdf of pdfs) {
+          const images = await extractImagesFromPdf(pdf.buffer);
+          allImages.push(...images);
+        }
+
+        if (allImages.length === 0) {
+          results.push({ id, subject: meta?.subject || id, error: 'No images found in PDF.' });
+          continue;
+        }
+
+        const analysis = await analyzeImagesWithVision(anthropicApiKey, allImages);
+        results.push({ id, subject: meta?.subject || id, analysis });
+      } catch (err) {
+        results.push({ id, subject: meta?.subject || id, error: err.message });
+      }
+    }
+
+    res.json({ ok: true, results });
+  } catch (err) {
+    console.error('Vision analysis error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

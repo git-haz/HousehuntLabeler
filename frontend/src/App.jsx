@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BACKEND = 'http://localhost:4000';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const VERSION = '1.9.0';
+const VERSION = '2.0.0';
 const VERSION_HISTORY = [
+  { version: '2.0.0', date: '2026-06-19', changes: 'AI vision analysis: optional Claude Haiku-powered photo analysis of PDF property images for house type classification; per-email selection' },
   { version: '1.9.0', date: '2026-06-19', changes: 'From/To date range; PDF house type classification (detached/bungalow/reject); downloadable processing log' },
   { version: '1.8.0', date: '2026-06-19', changes: 'Label filters: include/exclude labels when retrieving; toggle unread-only vs all emails' },
   { version: '1.7.0', date: '2026-06-19', changes: 'Show Newer / Show Older navigation buttons to page through emails; exclude already-processed emails' },
@@ -32,6 +33,10 @@ export default function App() {
   const [unreadOnly, setUnreadOnly] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [visionSelected, setVisionSelected] = useState(new Set());
+  const [visionResults, setVisionResults] = useState([]);
+  const [analyzing, setAnalyzing] = useState(false);
   const tokenClientRef = useRef(null);
 
   const log = useCallback((msg) => {
@@ -139,6 +144,58 @@ export default function App() {
     fetchEmails(newest.toISOString().split('T')[0], null);
   };
 
+  const toggleVision = (id) => {
+    setVisionSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleVisionAnalyze = async () => {
+    if (!anthropicKey) { log('Enter an Anthropic API key first.'); return; }
+    const pdfEmails = [...visionSelected].filter(id => emails.find(e => e.id === id)?.hasPdf);
+    if (pdfEmails.length === 0) { log('No emails with PDFs selected for vision analysis.'); return; }
+    setAnalyzing(true);
+    setVisionResults([]);
+    log(`Running AI vision analysis on ${pdfEmails.length} email(s)...`);
+    try {
+      const res = await fetch(`${BACKEND}/vision-analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailIds: pdfEmails, anthropicApiKey: anthropicKey }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setVisionResults(data.results);
+        log(`Vision analysis complete for ${data.results.length} email(s).`);
+        data.results.forEach((r) => {
+          if (r.error) {
+            log(`  ${r.id} — Error: ${r.error}`);
+          } else if (r.analysis) {
+            const a = r.analysis;
+            log(`  ${r.id} — ${a.overall_classification} (${a.overall_confidence}%) → label: ${a.label}`);
+            if (a.images) {
+              a.images.forEach((img) => {
+                log(`    Image ${img.image_number}: ${img.classification} (${img.confidence}%) — ${img.reasoning}`);
+              });
+            }
+            if (a.usage) {
+              log(`    Tokens: ${a.usage.input_tokens} in / ${a.usage.output_tokens} out`);
+            }
+          }
+        });
+      } else {
+        log(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      log(`Network error: ${err.message}`);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const handleDownloadLog = () => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const lines = [`HousehuntLabeler Log — ${new Date().toLocaleString()}`, ''];
@@ -149,6 +206,26 @@ export default function App() {
       r.reasoning.forEach((reason) => lines.push(`  - ${reason}`));
       lines.push('');
     });
+    if (visionResults.length > 0) {
+      lines.push('--- Vision Analysis ---', '');
+      visionResults.forEach((r) => {
+        lines.push(`Email: ${r.subject}`);
+        lines.push(`ID: ${r.id}`);
+        if (r.error) {
+          lines.push(`Error: ${r.error}`);
+        } else if (r.analysis) {
+          const a = r.analysis;
+          lines.push(`Overall: ${a.overall_classification} (${a.overall_confidence}%) → ${a.label}`);
+          if (a.images) {
+            a.images.forEach((img) => {
+              lines.push(`  Image ${img.image_number}: ${img.classification} (${img.confidence}%) — ${img.reasoning}`);
+            });
+          }
+          if (a.usage) lines.push(`  Tokens: ${a.usage.input_tokens} in / ${a.usage.output_tokens} out`);
+        }
+        lines.push('');
+      });
+    }
     lines.push('--- Console Log ---', '');
     logs.forEach((l) => lines.push(l));
     const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
@@ -244,6 +321,11 @@ export default function App() {
                 {processing ? 'Processing...' : `Process ${selected.size} Selected`}
               </button>
             )}
+            {anthropicKey && visionSelected.size > 0 && (
+              <button className="btn-vision" onClick={handleVisionAnalyze} disabled={analyzing}>
+                {analyzing ? 'Analyzing...' : `Analyze ${visionSelected.size} with AI`}
+              </button>
+            )}
             <button className="btn-small" onClick={() => setShowFilters(!showFilters)}>
               {showFilters ? 'Hide Filters' : 'Filters'}
             </button>
@@ -255,6 +337,23 @@ export default function App() {
                   <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
                   Unread only
                 </label>
+              </div>
+              <div className="filter-section">
+                <div className="filter-heading">AI Vision Analysis (optional):</div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="password"
+                    placeholder="Anthropic API Key"
+                    value={anthropicKey}
+                    onChange={(e) => setAnthropicKey(e.target.value)}
+                    className="date-input"
+                    style={{ flex: 1, maxWidth: '400px' }}
+                  />
+                  {anthropicKey && <span style={{ fontSize: '0.75rem', color: '#34a853' }}>Key set</span>}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>
+                  Uses Claude Haiku 4.5 to analyze property photos in PDFs. ~3 cents per 20 images.
+                </div>
               </div>
               {allLabels.length > 0 && (
                 <>
@@ -330,6 +429,12 @@ export default function App() {
                   <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '4px' }}>{e.snippet}</div>
                   <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                     {e.hasPdf && <span className="label-badge badge-pdf">PDF</span>}
+                    {e.hasPdf && anthropicKey && (
+                      <label className="vision-check" onClick={(ev) => ev.stopPropagation()}>
+                        <input type="checkbox" checked={visionSelected.has(e.id)} onChange={() => toggleVision(e.id)} />
+                        AI Vision
+                      </label>
+                    )}
                     {e.inSuffolk && <span className="label-badge badge-suffolk">Suffolk</span>}
                     {e.matchedKeywords.map((kw) => (
                       <span key={kw} className="label-badge badge-keyword">{kw}</span>
@@ -379,6 +484,42 @@ export default function App() {
                   <li key={i}>{reason}</li>
                 ))}
               </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {visionResults.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>AI Vision Analysis</h2>
+          {visionResults.map((r) => (
+            <div key={r.id} className="result-card">
+              <strong>{r.subject}</strong>
+              <div style={{ fontSize: '0.8rem', color: '#888' }}>{r.id}</div>
+              {r.error ? (
+                <div style={{ color: '#d93025', marginTop: '0.4rem' }}>{r.error}</div>
+              ) : r.analysis ? (
+                <div style={{ marginTop: '0.4rem' }}>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                    <span className={`label-badge ${r.analysis.label === 'detached' ? 'badge-detached' : r.analysis.label === 'reject-housetype' ? 'badge-reject' : 'badge-review'}`}>
+                      {r.analysis.label}
+                    </span>
+                    <span className="label-badge">{r.analysis.overall_classification}</span>
+                    <span className="label-badge">{r.analysis.overall_confidence}% confidence</span>
+                  </div>
+                  {r.analysis.images?.map((img) => (
+                    <div key={img.image_number} className="vision-image-result">
+                      <strong>Image {img.image_number}:</strong> {img.classification} ({img.confidence}%)
+                      <div style={{ fontSize: '0.8rem', color: '#555' }}>{img.reasoning}</div>
+                    </div>
+                  ))}
+                  {r.analysis.usage && (
+                    <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.3rem' }}>
+                      Tokens: {r.analysis.usage.input_tokens} input / {r.analysis.usage.output_tokens} output
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
