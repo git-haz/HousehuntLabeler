@@ -202,7 +202,7 @@ export default function App() {
 
       {results.length > 0 && (
         <div style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Results</h2>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Processing Log</h2>
           {results.map((r) => (
             <div key={r.id} className="result-card">
               <strong>{r.subject}</strong>
@@ -212,6 +212,11 @@ export default function App() {
                   <span key={l} className="label-badge">{l}</span>
                 ))}
               </div>
+              <ul className="reasoning-list">
+                {r.reasoning.map((reason, i) => (
+                  <li key={i}>{reason}</li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>

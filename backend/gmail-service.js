@@ -114,7 +114,15 @@ export async function processSelectedEmails(accessToken, emailIds, emailMeta) {
       body: JSON.stringify({ addLabelIds: labelsToAdd }),
     });
 
-    results.push({ id, subject: meta?.subject || id, labels: appliedNames, hasPdf: meta?.hasPdf, matchedKeywords: meta?.matchedKeywords || [] });
+    const reasoning = ['Added "to review" — applied to all processed emails.'];
+    if (meta?.hasPdf) {
+      reasoning.push('Added "attachment" — email contains a PDF attachment.');
+    }
+    if (meta?.matchedKeywords?.length > 0) {
+      reasoning.push(`Added "reject" + "not detached" — body contains: ${meta.matchedKeywords.join(', ')}.`);
+    }
+
+    results.push({ id, subject: meta?.subject || id, labels: appliedNames, hasPdf: meta?.hasPdf, matchedKeywords: meta?.matchedKeywords || [], reasoning });
   }
 
   return results;
